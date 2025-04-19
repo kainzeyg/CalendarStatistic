@@ -14,6 +14,22 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+type Settings struct {
+	WorkSchedule string    `json:"workSchedule"`
+	WorkHours    WorkHours `json:"workHours"`
+	Holidays     []Holiday `json:"holidays"`
+}
+
+type WorkHours struct {
+	Start string `json:"start"`
+	End   string `json:"end"`
+}
+
+type Holiday struct {
+	Date string `json:"date"`
+	Type string `json:"type"`
+}
+
 type Event struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
@@ -31,6 +47,34 @@ type TimeSummary struct {
 
 var db *sql.DB
 
+func handleSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case "GET":
+		// Чтение настроек из файла или базы данных
+		settings := Settings{
+			WorkSchedule: "5/2",
+			WorkHours: WorkHours{
+				Start: "09:00",
+				End:   "18:00",
+			},
+			Holidays: []Holiday{},
+		}
+		json.NewEncoder(w).Encode(settings)
+
+	case "POST":
+		var settings Settings
+		if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Здесь сохраняем настройки в базу данных или файл
+		json.NewEncoder(w).Encode(settings)
+	}
+}
+
 func main() {
 	initDB()
 	defer db.Close()
@@ -39,6 +83,7 @@ func main() {
 	http.HandleFunc("/api/events", handleEvents)
 	http.HandleFunc("/api/events/", handleSingleEvent)
 	http.HandleFunc("/api/stats", handleStats)
+	http.HandleFunc("/api/settings", handleSettings)
 
 	port := os.Getenv("PORT")
 	if port == "" {

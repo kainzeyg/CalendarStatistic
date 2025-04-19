@@ -23,6 +23,11 @@ body {
   color: #2c3e50;
 }
 
+.filter-controls {
+  display: flex;
+  gap: 10px;
+}
+
 .filters {
   display: flex;
   gap: 20px;
@@ -53,6 +58,11 @@ body {
   padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-primary:hover {
+  background: #2980b9;
 }
 
 .btn-secondary {
@@ -62,6 +72,11 @@ body {
   padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+  background: #d5dbdb;
 }
 
 .btn-danger {
@@ -71,6 +86,33 @@ body {
   padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-danger:hover {
+  background: #c0392b;
+}
+
+.btn-settings {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s;
+}
+
+.btn-settings:hover {
+  background: #f8f9fa;
+  border-color: #ccc;
+}
+
+.btn-small {
+  padding: 5px 10px;
+  font-size: 0.9em;
 }
 
 .stats-container {
@@ -120,19 +162,16 @@ body {
 
 .stat-progress-bar {
   height: 100%;
-  background: #3498db;
   border-radius: 4px;
   transition: width 0.5s ease;
 }
 
-/* Стили для конкретных типов событий */
 .task-stat .stat-progress-bar { background: #00955E; }
 .meeting-stat .stat-progress-bar { background: #0033A1; }
 .call-stat .stat-progress-bar { background: #6f42c1; }
 .study-stat .stat-progress-bar { background: #fd7e14; }
 .rest-stat .stat-progress-bar { background: #20c997; }
 
-/* Календарь */
 #calendar {
   background: white;
   border-radius: 8px;
@@ -140,7 +179,6 @@ body {
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
-/* Модальное окно */
 .modal {
   display: none;
   position: fixed;
@@ -159,7 +197,9 @@ body {
   border-radius: 8px;
   width: 90%;
   max-width: 500px;
+  max-height: 90vh;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  overflow-y: auto;
 }
 
 .form-group {
@@ -187,4 +227,59 @@ body {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 20px;
+}
+
+.time-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.time-inputs input {
+  width: 100px;
+}
+
+.holiday-controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+#holidaysContainer {
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 10px 0;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 10px;
+}
+
+#holidaysContainer p {
+  color: #777;
+  text-align: center;
+  margin: 0;
+}
+
+.holiday-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  margin-bottom: 6px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.holiday-item button {
+  background: none;
+  border: none;
+  color: #e74c3c;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.holiday-item button:hover {
+  color: #c0392b;
 }
