@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  go-calendar:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./events.db:/app/events.db
+      - ./static:/static
+    restart: unless-stopped

@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Статистика времени</title>
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+  <link href="/styles.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+  <div class="container">
+    <div class="stats-header">
+      <h1><i class="fas fa-chart-pie"></i> Статистика времени</h1>
+      <div class="filter-controls">
+        <button id="sortHours" class="sort-btn active">
+          <i class="fas fa-sort-amount-down"></i> По часам
+        </button>
+        <button id="sortType" class="sort-btn">
+          <i class="fas fa-sort-alpha-down"></i> По типу
+        </button>
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="filter-group">
+        <label for="startDate"><i class="far fa-calendar-alt"></i> Начальная дата</label>
+        <input type="date" id="startDate" class="form-control">
+      </div>
+      
+      <div class="filter-group">
+        <label for="endDate"><i class="far fa-calendar-alt"></i> Конечная дата</label>
+        <input type="date" id="endDate" class="form-control">
+      </div>
+      
+      <div class="filter-group">
+        <label>&nbsp;</label>
+        <button id="applyFilters" class="btn-primary">
+          <i class="fas fa-filter"></i> Применить
+        </button>
+        <button id="resetFilters" class="btn-secondary">
+          <i class="fas fa-redo"></i> Сбросить
+        </button>
+      </div>
+    </div>
+
+    <div id="statsContainer" class="stats-container">
+      <!-- Статистика будет загружена здесь -->
+    </div>
+
+    <div id="calendar"></div>
+  </div>
+
+  <!-- Модальное окно -->
+  <div id="eventModal" class="modal">
+    <div class="modal-content">
+      <h2 id="modalTitle">Добавить событие</h2>
+      <form id="eventForm">
+        <input type="hidden" id="eventId">
+        <div class="form-group">
+          <label for="eventTitle">Название</label>
+          <input type="text" id="eventTitle" required>
+        </div>
+        <div class="form-group">
+          <label for="eventType">Тип события</label>
+          <select id="eventType" class="form-control" required>
+            <option value="task" selected>Задача</option>
+            <option value="meeting">Встреча</option>
+            <option value="call">Звонок</option>
+            <option value="study">Учеба</option>
+            <option value="rest">Отдых</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="eventDescription">Описание</label>
+          <textarea id="eventDescription" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="eventStart">Начало</label>
+          <input type="datetime-local" id="eventStart" required>
+        </div>
+        <div class="form-group">
+          <label for="eventEnd">Конец</label>
+          <input type="datetime-local" id="eventEnd" required>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="deleteBtn" class="btn-danger">Удалить</button>
+          <button type="button" class="btn-secondary" onclick="closeModal()">Отмена</button>
+          <button type="submit" class="btn-primary">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/locales/ru.min.js"></script>
+  
+  <script>
+    // Конфигурация типов событий
+    const eventTypes = {
+      task: { name: 'Задачи', color: '#00955E', icon: 'fa-tasks' },
+      meeting: { name: 'Встречи', color: '#0033A1', icon: 'fa-handshake' },
+      call: { name: 'Звонки', color: '#6f42c1', icon: 'fa-phone' },
+      study: { name: 'Учеба', color: '#fd7e14', icon: 'fa-graduation-cap' },
+      rest: { name: 'Отдых', color: '#20c997', icon: 'fa-couch' }
+    };
+
+    // Текущие фильтры
+    let currentFilters = {
+      start: '',
+      end: '',
+      sort: 'hours'
+    };
+
+    // Загрузка статистики
+    async function loadStats() {
+      try {
+        let url = '/api/stats?';
+        if (currentFilters.start) url += `start=${currentFilters.start}&`;
+        if (currentFilters.end) url += `end=${currentFilters.end}&`;
+        url += `sort=${currentFilters.sort}`;
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Ошибка загрузки статистики');
+        
+        const stats = await response.json();
+        updateStats(stats);
+      } catch (error) {
+        console.error('Ошибка загрузки статистики:', error);
+        // Создаем нулевые значения для всех типов при ошибке
+        const emptyStats = Object.keys(eventTypes).map(type => ({
+          type,
+          hours: 0,
+          name: eventTypes[type].name
+        }));
+        updateStats(emptyStats);
+      }
+    }
+
+    // Обновление статистики
+    function updateStats(stats) {
+      const container = document.getElementById('statsContainer');
+      container.innerHTML = '';
+      
+      // Находим максимальное количество часов для масштабирования
+      const maxHours = Math.max(...stats.map(s => s.hours), 1);
+      
+      // Создаем элементы для всех типов
+      Object.entries(eventTypes).forEach(([type, config], index) => {
+        const stat = stats.find(s => s.type === type) || { type, hours: 0 };
+        
+        const statItem = document.createElement('div');
+        statItem.className = `stat-item ${type}-stat`;
+        statItem.style.animationDelay = `${index * 0.1}s`;
+        statItem.innerHTML = `
+          <div class="stat-value">
+            <i class="fas ${config.icon}"></i> ${stat.hours.toFixed(1)}
+          </div>
+          <div class="stat-label">${config.name}</div>
+          <div class="stat-progress">
+            <div class="stat-progress-bar" style="width: ${(stat.hours / maxHours) * 100}%"></div>
+          </div>
+        `;
+        container.appendChild(statItem);
+      });
+    }
+
+    // Глобальные функции для работы с модальным окном
+    window.openModal = function(eventData = {}) {
+      const modal = document.getElementById('eventModal');
+      const deleteBtn = document.getElementById('deleteBtn');
+      const modalTitle = document.getElementById('modalTitle');
+
+      // Установка режима (создание/редактирование)
+      if (eventData.id) {
+        modalTitle.textContent = 'Редактировать событие';
+        deleteBtn.style.display = 'inline-block';
+      } else {
+        modalTitle.textContent = 'Добавить событие';
+        deleteBtn.style.display = 'none';
+      }
+
+      // Заполнение формы данными
+      document.getElementById('eventId').value = eventData.id || '';
+      document.getElementById('eventTitle').value = eventData.title || '';
+      document.getElementById('eventDescription').value = eventData.description || '';
+      document.getElementById('eventType').value = eventData.type || 'task';
+      
+      // Установка дат
+      const startDate = eventData.start ? new Date(eventData.start) : new Date();
+      const endDate = eventData.end ? new Date(eventData.end) : new Date(startDate.getTime() + 60*60*1000);
+      
+      document.getElementById('eventStart').value = formatDateTimeLocal(startDate);
+      document.getElementById('eventEnd').value = formatDateTimeLocal(endDate);
+
+      // Показываем модальное окно
+      modal.style.display = 'block';
+    };
+
+    window.closeModal = function() {
+      document.getElementById('eventModal').style.display = 'none';
+    };
+
+    // Форматирование даты для input[type=datetime-local]
+    function formatDateTimeLocal(date) {
+      const pad = num => num.toString().padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    // Форматирование даты для API (YYYY-MM-DD)
+    function formatDate(date) {
+        if (!date) return '';
+        const d = new Date(date);
+        const pad = num => num.toString().padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    }
+
+    function formatDateTimeAPI(date) {
+        if (!date) return '';
+        const d = new Date(date);
+        const pad = num => num.toString().padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+    }
+
+    // Функция для получения первого дня месяца
+    function getFirstDayOfMonth(date) {
+        return new Date(date.getFullYear(), date.getMonth(), 1);
+    }
+
+    // Функция для получения последнего дня месяца
+    function getLastDayOfMonth(date) {
+        return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    }
+
+    // Инициализация приложения
+    document.addEventListener('DOMContentLoaded', function() {
+      // Установка дат по умолчанию (текущий месяц)
+      const today = new Date();
+      const firstDay = getFirstDayOfMonth(today);
+      const lastDay = getLastDayOfMonth(today);
+      
+      // Установка дат в формате YYYY-MM-DD
+      document.getElementById('startDate').value = formatDate(firstDay);
+      document.getElementById('endDate').value = formatDate(lastDay);
+      
+      currentFilters.start = formatDate(firstDay);
+      currentFilters.end = formatDate(lastDay);
+      
+      // Загрузка статистики
+      loadStats();
+      
+      // Инициализация календаря
+      const calendarEl = document.getElementById('calendar');
+      const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridDay',
+        locale: 'ru',
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'timeGridDay,timeGridWeek,dayGridMonth'
+        },
+        buttonText: {
+          today: 'Сегодня',
+          month: 'Месяц',
+          week: 'Неделя',
+          day: 'День'
+        },
+        allDaySlot: false,
+        events: '/api/events',
+        eventDisplay: 'block',
+        eventTimeFormat: {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        },
+        navLinks: true,
+        editable: true,
+        dateClick: function(info) {
+          openModal({
+            start: info.date,
+            end: new Date(info.date.getTime() + 60*60*1000)
+          });
+        },
+        eventClick: function(info) {
+          openModal({
+            id: info.event.id,
+            title: info.event.title,
+            description: info.event.extendedProps.description,
+            start: info.event.start,
+            end: info.event.end || info.event.start,
+            type: info.event.extendedProps.type || 'task'
+          });
+        },
+        eventDidMount: function(info) {
+          const eventType = info.event.extendedProps.type || 'task';
+          info.el.style.backgroundColor = eventTypes[eventType]?.color || '#00955E';
+        },
+        eventChange: function() { loadStats(); },
+        eventRemove: function() { loadStats(); }
+      });
+
+      calendar.render();
+      window.calendar = calendar;
+
+      // Обработчики фильтров
+      document.getElementById('applyFilters').addEventListener('click', updateFilters);
+      document.getElementById('resetFilters').addEventListener('click', resetFilters);
+      
+      document.getElementById('sortHours').addEventListener('click', function() {
+        currentFilters.sort = 'hours';
+        this.classList.add('active');
+        document.getElementById('sortType').classList.remove('active');
+        loadStats();
+      });
+      
+      document.getElementById('sortType').addEventListener('click', function() {
+        currentFilters.sort = 'type';
+        this.classList.add('active');
+        document.getElementById('sortHours').classList.remove('active');
+        loadStats();
+      });
+      
+      // Обработчик формы
+      document.getElementById('eventForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const eventData = {
+            id: document.getElementById('eventId').value,
+            title: document.getElementById('eventTitle').value,
+            description: document.getElementById('eventDescription').value,
+            start: formatDateTimeAPI(new Date(document.getElementById('eventStart').value)),
+            end: formatDateTimeAPI(new Date(document.getElementById('eventEnd').value)),
+            type: document.getElementById('eventType').value
+        };
+
+        try {
+          const url = eventData.id ? `/api/events/${eventData.id}` : '/api/events';
+          const method = eventData.id ? 'PUT' : 'POST';
+
+          const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(eventData)
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Ошибка сервера');
+          }
+          
+          calendar.refetchEvents();
+          loadStats();
+          closeModal();
+        } catch (error) {
+          console.error('Ошибка:', error);
+          alert('Ошибка: ' + error.message);
+        }
+      });
+
+      // Обработчик удаления
+      document.getElementById('deleteBtn').addEventListener('click', async function() {
+        const eventId = document.getElementById('eventId').value;
+        if (!eventId || !confirm('Вы точно хотите удалить это событие?\nЭто действие нельзя отменить.')) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/events/${eventId}`, {
+            method: 'DELETE'
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Ошибка сервера');
+          }
+          
+          calendar.refetchEvents();
+          loadStats();
+          closeModal();
+        } catch (error) {
+          console.error('Ошибка:', error);
+          alert('Ошибка удаления: ' + error.message);
+        }
+      });
+    });
+
+    // Обновление фильтров
+    function updateFilters() {
+      const startDateInput = document.getElementById('startDate');
+      const endDateInput = document.getElementById('endDate');
+      
+      currentFilters.start = startDateInput.value ? formatDate(startDateInput.valueAsDate) : '';
+      currentFilters.end = endDateInput.value ? formatDate(endDateInput.valueAsDate) : '';
+      
+      loadStats();
+    }
+
+    // Сброс фильтров
+    function resetFilters() {
+      const today = new Date();
+      const firstDay = getFirstDayOfMonth(today);
+      const lastDay = getLastDayOfMonth(today);
+      
+      // Установка дат в формате YYYY-MM-DD
+      document.getElementById('startDate').value = formatDate(firstDay);
+      document.getElementById('endDate').value = formatDate(lastDay);
+      
+      currentFilters.start = formatDate(firstDay);
+      currentFilters.end = formatDate(lastDay);
+      
+      loadStats();
+    }
+
+    // Закрытие модального окна при клике вне его
+    window.onclick = function(event) {
+      const modal = document.getElementById('eventModal');
+      if (event.target === modal) {
+        closeModal();
+      }
+    };
+  </script>
+</body>
+</html>
