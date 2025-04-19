@@ -76,7 +76,6 @@ func handleStats(w http.ResponseWriter, r *http.Request) {
 
 	startDate := r.URL.Query().Get("start")
 	endDate := r.URL.Query().Get("end")
-	sortBy := r.URL.Query().Get("sort")
 
 	query := `
         SELECT 
@@ -99,13 +98,6 @@ func handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query += " GROUP BY type"
-
-	switch sortBy {
-	case "type":
-		query += " ORDER BY type"
-	default:
-		query += " ORDER BY hours DESC"
-	}
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

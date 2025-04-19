@@ -12,14 +12,7 @@
   <div class="container">
     <div class="stats-header">
       <h1><i class="fas fa-chart-pie"></i> Статистика времени</h1>
-      <div class="filter-controls">
-        <button id="sortHours" class="sort-btn active">
-          <i class="fas fa-sort-amount-down"></i> По часам
-        </button>
-        <button id="sortType" class="sort-btn">
-          <i class="fas fa-sort-alpha-down"></i> По типу
-        </button>
-      </div>
+      
     </div>
 
     <div class="filters">
@@ -108,8 +101,7 @@
     // Текущие фильтры
     let currentFilters = {
       start: '',
-      end: '',
-      sort: 'hours'
+      end: ''
     };
 
     // Загрузка статистики
@@ -117,8 +109,7 @@
       try {
         let url = '/api/stats?';
         if (currentFilters.start) url += `start=${currentFilters.start}&`;
-        if (currentFilters.end) url += `end=${currentFilters.end}&`;
-        url += `sort=${currentFilters.sort}`;
+        if (currentFilters.end) url += `end=${currentFilters.end}`;
 
         const response = await fetch(url);
         if (!response.ok) throw new Error('Ошибка загрузки статистики');
@@ -305,20 +296,6 @@
       // Обработчики фильтров
       document.getElementById('applyFilters').addEventListener('click', updateFilters);
       document.getElementById('resetFilters').addEventListener('click', resetFilters);
-      
-      document.getElementById('sortHours').addEventListener('click', function() {
-        currentFilters.sort = 'hours';
-        this.classList.add('active');
-        document.getElementById('sortType').classList.remove('active');
-        loadStats();
-      });
-      
-      document.getElementById('sortType').addEventListener('click', function() {
-        currentFilters.sort = 'type';
-        this.classList.add('active');
-        document.getElementById('sortHours').classList.remove('active');
-        loadStats();
-      });
       
       // Обработчик формы
       document.getElementById('eventForm').addEventListener('submit', async function(e) {
