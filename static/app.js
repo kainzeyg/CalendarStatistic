@@ -102,11 +102,315 @@ const eventTypes = {
     calendar.render();
     applySettings();
   }
+
+  // Глобальная переменная для отслеживания состояния
+let isGeneratingReport = false;
+
+async function downloadTimeReport() {
+  // Защита от повторного нажатия
+  if (isGeneratingReport) return;
+  isGeneratingReport = true;
+
+  const loader = createLoader();
+  document.body.appendChild(loader);
+
+  try {
+    // 1. Обновляем статистику
+    await loadStats();
+    
+    // 2. Ждём отрисовки статистики (3 попытки с интервалом 500мс)
+    await waitForRendering('.stat-item', 3, 500);
+    
+    // 3. Получаем данные задач
+    const tasks = await fetchTasksForPeriod(currentFilters.start, currentFilters.end);
+    
+    // 4. Генерируем HTML
+    const htmlContent = generateReportHtml(tasks);
+    
+    // 5. Создаём и скачиваем файл
+    await downloadHtmlFile(htmlContent, `Отчет_${new Date().toLocaleDateString('ru-RU')}.html`);
+
+  } catch (error) {
+    console.error('Ошибка генерации отчёта:', error);
+    showError('Не удалось создать отчёт. Пожалуйста, попробуйте ещё раз.');
+  } finally {
+    // Убираем лоадер
+    if (loader.parentNode) {
+      document.body.removeChild(loader);
+    }
+    isGeneratingReport = false;
+  }
+}
+
+// Вспомогательные функции
+function createLoader() {
+  const loader = document.createElement('div');
+  loader.innerHTML = `
+    <div style="
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 20px;
+      border-radius: 5px;
+      text-align: center;
+      z-index: 9999;
+    ">
+      <div>Идёт генерация отчёта...</div>
+      <div style="
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+        margin: 10px auto;
+      "></div>
+    </div>
+  `;
+  return loader;
+}
+
+async function fetchTasksForPeriod(startDate, endDate) {
+  try {
+    // 1. Формируем URL для запроса
+    let url = '/api/events';
+    if (startDate && endDate) {
+      url += `?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`;
+    }
+
+    // 2. Делаем запрос к вашему API
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+
+    // 3. Проверяем ответ
+    if (!response.ok) {
+      throw new Error(`Ошибка сервера: ${response.status}`);
+    }
+
+    // 4. Парсим и возвращаем реальные данные
+    const events = await response.json();
+    return events.map(event => ({
+      title: event.title || 'Без названия',
+      description: event.description || '',
+      start: event.start,
+      end: event.end,
+      type: event.type || 'task'
+    }));
+
+  } catch (error) {
+    console.error('Ошибка загрузки задач:', error);
+    
+    // 5. Возвращаем тестовые данные только в случае ошибки
+    return [{
+      title: "Реальная задача не загрузилась",
+      description: "Проверьте подключение к API",
+      start: new Date().toISOString(),
+      end: new Date(Date.now() + 3600000).toISOString(),
+      type: "error"
+    }];
+  }
+}
+
+function getMockTasks() {
+  return [
+    {
+      title: "Пример задачи",
+      description: "Это тестовая задача для демонстрации",
+      start: new Date().toISOString(),
+      end: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      type: "task"
+    },
+    {
+      title: "Тестовая встреча",
+      description: "Обсуждение проекта",
+      start: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+      end: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+      type: "meeting"
+    }
+  ];
+}
+
+function generateReportHtml(tasks) {
+  const stats = Array.from(document.querySelectorAll('.stat-item')).map(el => ({
+    label: el.querySelector('.stat-label')?.textContent || '',
+    value: el.querySelector('.stat-value')?.textContent || '0'
+  }));
+
+  return `<!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Отчёт по времени</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #2c3e50; text-align: center; margin-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 30px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f8f9fa; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .total-row { font-weight: bold; background-color: #eaf2f8 !important; }
+        .footer { margin-top: 30px; color: #7f8c8d; font-size: 12px; text-align: center; }
+      </style>
+    </head>
+    <body>
+      <h1>Отчёт по использованию времени</h1>
+      <p style="text-align: center; color: #555;">
+        Период: ${currentFilters.start ? formatDisplayDate(currentFilters.start) : ''} 
+        ${currentFilters.end ? ` - ${formatDisplayDate(currentFilters.end)}` : ''}
+      </p>
+      
+      <h2>Статистика по категориям</h2>
+      <table>
+        <thead>
+          <tr><th>Категория</th><th>Затраченное время</th></tr>
+        </thead>
+        <tbody>
+          ${stats.map(item => `<tr><td>${item.label}</td><td>${item.value}</td></tr>`).join('')}
+        </tbody>
+      </table>
+      
+      <h2>Детализация задач</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Начало</th>
+            <th>Окончание</th>
+            <th>Задача</th>
+            <th>Описание</th>
+            <th>Затрачено</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tasks.map(task => `
+            <tr>
+              <td>${formatDate(task.start)}</td>
+              <td>${formatTime(task.start)}</td>
+              <td>${formatTime(task.end)}</td>
+              <td>${escapeHtml(task.title)}</td>
+              <td>${escapeHtml(task.description || '')}</td>
+              <td>${calculateHours(task.start, task.end)} ч</td>
+            </tr>
+          `).join('')}
+          <tr class="total-row">
+            <td colspan="5">Общее время:</td>
+            <td>${calculateTotalHours(tasks)} ч</td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <div class="footer">
+        Отчёт сгенерирован ${new Date().toLocaleString('ru-RU')}
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+async function downloadHtmlFile(content, filename) {
+  return new Promise((resolve) => {
+    const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    
+    document.body.appendChild(a);
+    a.click();
+    
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      resolve();
+    }, 100);
+  });
+}
+
+// Утилиты
+function waitForRendering(selector, attempts = 3, delay = 500) {
+  return new Promise((resolve, reject) => {
+    const check = (attempt) => {
+      const element = document.querySelector(selector);
+      if (element) {
+        resolve(element);
+      } else if (attempt > 0) {
+        setTimeout(() => check(attempt - 1), delay);
+      } else {
+        reject(new Error(`Элемент ${selector} не найден`));
+      }
+    };
+    check(attempts);
+  });
+}
+
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('ru-RU');
+}
+
+function formatTime(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+function calculateHours(start, end) {
+  const diff = new Date(end) - new Date(start);
+  return (diff / (1000 * 60 * 60)).toFixed(1);
+}
+
+function calculateTotalHours(tasks) {
+  return tasks.reduce((total, task) => {
+    return total + parseFloat(calculateHours(task.start, task.end));
+  }, 0).toFixed(1);
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return text.toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function showError(message) {
+  const errorEl = document.createElement('div');
+  errorEl.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #e74c3c;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    z-index: 9999;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  `;
+  errorEl.textContent = message;
+  document.body.appendChild(errorEl);
+  
+  setTimeout(() => {
+    document.body.removeChild(errorEl);
+  }, 5000);
+}
+
   
   function setupEventHandlers() {
     // Обработчики фильтров
     document.getElementById('applyFilters').addEventListener('click', updateFilters);
     document.getElementById('resetFilters').addEventListener('click', resetFilters);
+    document.getElementById('downloadReport').addEventListener('click', downloadTimeReport);
     
     // Обработчик кнопки настроек
     document.getElementById('settingsBtn').addEventListener('click', openSettingsModal);

@@ -283,3 +283,7 @@ body {
 .holiday-item button:hover {
   color: #c0392b;
 }
+
+.btn-primary i.fas.fa-file-pdf {
+  margin-right: 5px;
+}
