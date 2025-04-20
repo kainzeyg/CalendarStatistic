@@ -1,6 +1,6 @@
 # CalendarStatistic - Электронный ежедневник с аналитикой
 
-
+![image](https://github.com/user-attachments/assets/d1c9a4aa-14ea-4f7f-894f-fcba61932c08)
 
 ## Описание
 
